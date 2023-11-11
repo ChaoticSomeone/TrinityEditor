@@ -7,10 +7,11 @@ from sys import exit
 pg.init()
 
 HOLD_FAST_KEY_SENS = 1
-fastKeysCount = {
-	"backspace": 0,
-	"enter": 0
-}
+
+def clamp(x, min, max):
+	if x < min: return min
+	elif x > max: return max
+	else: return x
 
 def saveFile(contents):
 	files = [("Uranium File", "*.uran"), ("All Files", "*.*")]
@@ -20,27 +21,42 @@ def saveFile(contents):
 	file_name = tkinter.filedialog.asksaveasfile(parent=top, filetypes=files, defaultextension=".uran")
 	top.destroy()
 
-	savePath = file_name.name
-	with open(savePath, "w") as f:
-		for i, l in enumerate(contents):
-			if i < len(contents) - 1:
-				f.write(l + "\n")
-			else:
-				f.write(l)
+	if file_name is not None:
+		savePath = file_name.name
+		with open(savePath, "w") as f:
+			for i, l in enumerate(contents):
+				if i < len(contents) - 1:
+					f.write(l + "\n")
+				else:
+					f.write(l)
 
-def handleInput(e, isEdit, lidx, keyCounts, contents):
+def handleInput(e, isEdit, lidx, ilidx, contents):
 	if isEdit:
 		if e.type == pg.TEXTINPUT:
-			contents[lidx] += e.text
+			contents[lidx] = contents[lidx][:ilidx] + e.text + contents[lidx][ilidx:]
+			ilidx = clamp(ilidx + 1, 0, len(contents[lidx]))
 
 		keys = pg.key.get_pressed()
 		if keys[pg.K_BACKSPACE]:
-			contents[lidx] = contents[lidx][:-1]
+			contents[lidx] = contents[lidx][:ilidx][:-1] + contents[lidx][ilidx:]
+			ilidx = clamp(ilidx - 1, 0, len(contents[lidx]))
 		elif keys[pg.K_RETURN]:
 			lidx += 1
 			contents.append("")
+			ilidx = 0
 		elif keys[pg.K_TAB]:
 			contents[lidx] += " " * 4
+			ilidx = clamp(ilidx + 4, 0, len(contents[lidx]))
+		elif keys[pg.K_DELETE]:
+			contents[lidx] = contents[lidx][:ilidx] + contents[lidx][ilidx+1:]
+		elif keys[pg.K_UP] and lidx > 0:
+			lidx -= 1
+		elif keys[pg.K_DOWN] and lidx < len(contents):
+			lidx += 1
+		elif keys[pg.K_LEFT] and ilidx > 0:
+			ilidx = clamp(ilidx - 1, 0, len(contents[lidx]))
+		elif keys[pg.K_RIGHT] and ilidx < len(contents[lidx]):
+			ilidx = clamp(ilidx + 1, 0, len(contents[lidx]))
 
 		"""
 		keys = pg.key.get_pressed()
@@ -59,7 +75,7 @@ def handleInput(e, isEdit, lidx, keyCounts, contents):
 			contents[lidx] += " " * 4
 		"""
 
-	return lidx
+	return lidx, ilidx
 
 if __name__ == '__main__':
 	win = pg.display.set_mode((800,500))
@@ -68,16 +84,18 @@ if __name__ == '__main__':
 
 	lines = [""]
 	lineIdx = 0
+	inlineIdx = 0
 	textField = pg.Rect(0,  y := 50, win.get_width(), win.get_height() - y)
 	pg.key.start_text_input()
 	isEditting = False
+	LINE_SPACING = 1.2
 
-	fontSize = 20
-	font = pg.font.SysFont("Calibri", fontSize, False, False)
+	fontSize = 16
+	font = pg.font.SysFont("lucidaconsole", fontSize, False, False)
 
 	while on:
 		win.fill((0, 0, 0))
-		pg.draw.rect(win, (255, 0, 0), (0, textField.y + lineIdx * 1.2 * fontSize, win.get_width(), fontSize))
+		#pg.draw.rect(win, (255, 0, 0), (0, textField.y + lineIdx * LINE_SPACING * fontSize, win.get_width(), fontSize))
 
 		for ev in pg.event.get():
 			if ev.type == pg.QUIT:
@@ -94,15 +112,18 @@ if __name__ == '__main__':
 				if ev.key == pg.K_ESCAPE:
 					saveFile(lines)
 
-			lineIdx = handleInput(ev, isEditting, lineIdx, fastKeysCount, lines)
+			lineIdx, inlineIdx = handleInput(ev, isEditting, lineIdx, inlineIdx, lines)
 
 		if not on:
 			break
 
 		for i, line in enumerate(lines):
 			text = font.render(line, True, (255, 255, 255), (0, 0, 0))
-			# tRect = text.get_rect()
-			win.blit(text, (textField.x + 10, textField.y + fontSize * 1.2 * i))
+			win.blit(text, (textField.x + 10, textField.y + fontSize * LINE_SPACING * i))
+
+			if i == lineIdx:
+				widthPerChar = font.size("m")[0]
+				pg.draw.rect(win, (0,255,0), (widthPerChar * (inlineIdx-1) + 10 + (10 if inlineIdx == 0 else 0), textField.y + fontSize * LINE_SPACING * i + fontSize, widthPerChar, 5))
 
 		pg.display.update()
 
